@@ -7,6 +7,7 @@ import math
 import numpy as np
 from collections import Counter
 
+
 # Function to read the unigram model
 def readWordModel():
     # Read the unigram model
@@ -77,7 +78,7 @@ def findEdit(candidate, query):
     if len(candidate) == len(query):
         for i in range(len(candidate)):
             if candidate[i] != query[i]:
-                return (query[i], candidate[i]), 'Substitution'
+                return (candidate[i], query[i]), 'Substitution'
     elif len(candidate) > len(query): #Case of Deletion 
         for i in range(len(query)):
             if candidate[i] != query[i]:
@@ -89,26 +90,6 @@ def findEdit(candidate, query):
                 return (candidate[i-1], query[i]), 'Insertion'
         return (candidate[-1], query[-1]), 'Insertion'
 
-def levensteinDP(str1, str2):
-    """
-    Dynamic programming implementation of the Levenshtein distance algorithm.
-    str1: the query 
-    str2: the suggestion
-    """
-    m = len(str1)
-    n = len(str2)
-    dp = [[0 for x in range(n+1)] for x in range(m+1)]
-    for i in range(m+1):
-        for j in range(n+1):
-            if i == 0:
-                dp[i][j] = j
-            elif j == 0:
-                dp[i][j] = i
-            elif str1[i-1] == str2[j-1]:
-                dp[i][j] = dp[i-1][j-1]
-            else:
-                dp[i][j] = 1 + min(dp[i][j-1], dp[i-1][j], dp[i-1][j-1])
-    return dp[m][n]
 
 def levensteinDP2(str1, str2):
     """
@@ -144,7 +125,11 @@ def calculateWordProbability(word, wordCounter):
         return wordCounter[word]/sum(wordCounter.values())
     else:
         return 0
-            
+
+def log(x):
+    if x == 0:
+        return -1000
+    return np.log(x)
     
 # Function to calculate the probability of a word given a noisy channel model
 def calculateNoisyChannelProbability(candidate, word, insertion, deletion, substitution, bigrams, unigrams, wordCounter):
@@ -153,35 +138,44 @@ def calculateNoisyChannelProbability(candidate, word, insertion, deletion, subst
     if p_w == 0:
         return 0
     edit, editType = findEdit(candidate, word)
-    logprobability = np.log(p_w)
+    logprobability = log(p_w)
     if editType == 'Insertion':
-        logprobability += np.log(insertion[edit]) - np.log(unigrams[edit[0]])
+        if edit[0] == '#':
+            logprobability += log(insertion[edit]) - log(unigrams[edit[1]] )
+        else:
+            logprobability += log(insertion[edit] ) - log(unigrams[edit[0]] )
     elif editType == 'Deletion':
         if edit[0] == '#':
-            logprobability += np.log(deletion[edit]) - np.log(unigrams[edit[1]])
+            logprobability += log(deletion[edit]) - log(unigrams[edit[1]])
         else:
-            logprobability += np.log(deletion[edit]) - np.log(bigrams[edit])
+            edit = edit[0] + edit[1]
+            logprobability += log(deletion[edit]) - log(bigrams[edit] )
     elif editType == 'Substitution':
-        logprobability += np.log(substitution[edit]) - np.log(unigrams[edit[1]])
-    return probability
+        logprobability += log(substitution[edit] ) - log(unigrams[edit[1]] )
+    return logprobability
 
 
 # Function to find the best suggestion
-def best_suggestion(query, suggestions, insertion, deletion, substitution, bigrams, unigrams, wordCounter):
-    best_suggestion = ''
-    best_probability = 0    
+def best_suggestion(query, suggestions, insertion, deletion, substitution, bigrams, unigrams, wordCounter): 
     probabilities = [calculateNoisyChannelProbability(suggestion, query, insertion, deletion, 
                      substitution, bigrams, unigrams, wordCounter) for suggestion in suggestions]
-    return suggestions[np.argmax(probabilities)], np.max(probabilities)
-
+    
+    max_prob = np.max(probabilities)
+    suggestions = np.array(suggestions)
+    probabilities = np.array(probabilities)
+    best_suggestions = suggestions[probabilities == max_prob]
+    if len(best_suggestions) == 1:
+        return best_suggestions[0], max_prob
+    else:
+        word_probs = [calculateWordProbability(word, wordCounter) for word in best_suggestions]
+        return best_suggestions[np.argmax(word_probs)], max_prob
+    
 def correct(query: str) -> str:
+    if query in wordCounter:
+        return query
     suggestions = [word for word in wordCounter.keys() if levensteinDP2(word, query) == 1 ]
     suggestion, probability = best_suggestion(query, suggestions, insertions, deletions, substitutions, bigrams, unigrams, wordCounter)
-    query_probability = calculateWordProbability(query, wordCounter)
-    if probability > query_probability:
-        return suggestion
-    else:
-        return query 
+    return suggestion
 
 
 wordModel = readWordModel()
@@ -196,5 +190,7 @@ unigrams = createNoisyChannelModel(readNoisyChannelFiles('unigrams.csv'))
 
 if __name__ == '__main__':
     query = sys.argv[1]
+    print("Query: ", query)
+    #import pdb; pdb.set_trace()
     word = correct(query)
     print("Correct: ", word)
