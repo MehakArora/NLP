@@ -33,7 +33,7 @@ def initialProbabilities(taggedSentences, tags):
 # Get transition probabilities and emission probabilities
 def transObsProbabilities(taggedSentences, tags, tagCount, words, wordCount):
     tpMatrix = np.zeros((len(tags), len(tags)))
-    obMatrix = np.zeros((len(words), len(tags)))
+    obMatrix = np.ones((len(words), len(tags)))
     for sentence in taggedSentences:
         for i in range(len(sentence)):
             if i < len(sentence) - 1:
